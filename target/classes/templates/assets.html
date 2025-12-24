@@ -1,0 +1,638 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::#main-content})}">
+<body>
+<div id="main-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>资产管理</h2>
+        <div class="d-flex align-items-center gap-2">
+            <!-- Search Form connected to the hidden filter inputs via JS or just simple GET. 
+                 Actually, simpler to make this form submit to the same endpoint. 
+                 But to keep filters, we should probably merge them. 
+                 Let's keep it simple: Main search resets filters? Or keep filters?
+                 Let's make the keyword input part of the main filter form. -->
+            <div class="input-group" style="width: auto;">
+                <select form="filterForm" name="creationYear" class="form-select" onchange="this.form.submit()">
+                    <option value="">全部年份</option>
+                    <option th:each="y : ${filterOptions.creationYears}" 
+                            th:value="${y}" 
+                            th:text="${y} + '年'"
+                            th:selected="${searchDto.creationYear == y}"></option>
+                </select>
+            </div>
+            <div class="input-group" style="width: 300px;">
+                <input type="text" form="filterForm" name="keyword" class="form-control" placeholder="搜索资产名称..." th:value="${searchDto.keyword}">
+                <button type="submit" form="filterForm" class="btn btn-outline-secondary">
+                    <i class="bi bi-search"></i>
+                </button>
+            </div>
+            
+            <button class="btn btn-danger" onclick="deleteBatch()">
+                <i class="bi bi-trash"></i> 批量删除
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#createModal">
+                <i class="bi bi-plus-lg"></i> 新增资产
+            </button>
+            <button class="btn btn-success" data-bs-toggle="modal" data-bs-target="#importModal">
+                <i class="bi bi-file-earmark-excel"></i> 导入 Excel
+            </button>
+        </div>
+    </div>
+
+    <!-- Hidden Filter Form -->
+    <form id="filterForm" th:action="@{/assets}" method="get" style="display:none;">
+        <!-- keyword input is above, linked via 'form' attribute -->
+        <input type="hidden" name="category" th:value="${searchDto.category}">
+        <input type="hidden" name="hasAssetNumber" th:value="${searchDto.hasAssetNumber}">
+        <input type="hidden" name="status" th:value="${searchDto.status}">
+        <input type="hidden" name="purchaseDate" th:value="${searchDto.purchaseDate}">
+        <input type="hidden" name="acquisitionSource" th:value="${searchDto.acquisitionSource}">
+        <input type="hidden" name="managementDepartment" th:value="${searchDto.managementDepartment}">
+        <input type="hidden" name="locationName" th:value="${searchDto.locationName}">
+        <input type="hidden" name="manager" th:value="${searchDto.manager}">
+    </form>
+
+    <div class="card shadow-sm">
+        <div class="card-body p-0">
+            <div class="table-responsive" style="min-height: 400px;"> <!-- Ensure dropdowns are not cut off if few rows -->
+                <table class="table table-hover table-sm align-middle text-nowrap mb-0" style="font-size: 0.9rem;">
+                    <thead class="table-light">
+                    <tr>
+                        <th class="text-center" style="width: 40px;">
+                            <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAll(this)">
+                        </th>
+                        <th class="text-center" style="width: 60px;">序号</th>
+                        <th>数据来源</th>
+                        <th>填报单位</th>
+                        <th>资产名称</th>
+                        
+                        <!-- 资产类别 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>资产类别</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.category != null and searchDto.category != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('category', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.categories}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('category', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.category == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <th>规格型号</th>
+                        
+                        <!-- 有无编号 -->
+                        <th style="width: 80px;">
+                            <div class="d-flex align-items-center gap-1">
+                                <span>有无编号</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.hasAssetNumber != null and searchDto.hasAssetNumber != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('hasAssetNumber', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.hasAssetNumbers}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('hasAssetNumber', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.hasAssetNumber == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <th>资产编号</th>
+                        
+                        <!-- 状态 -->
+                        <th class="text-center">
+                            <div class="d-flex align-items-center justify-content-center gap-1">
+                                <span>状态</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.status != null and searchDto.status != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('status', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.statuses}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('status', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.status == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <!-- 取得时间 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>取得时间</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.purchaseDate != null and searchDto.purchaseDate != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('purchaseDate', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.purchaseDates}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('purchaseDate', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.purchaseDate == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <!-- 取得来源 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>取得来源</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.acquisitionSource != null and searchDto.acquisitionSource != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('acquisitionSource', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.sources}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('acquisitionSource', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.acquisitionSource == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <th class="text-end">数量</th>
+                        <th class="text-end">原值</th>
+                        
+                        <!-- 管理部门 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>管理部门</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.managementDepartment != null and searchDto.managementDepartment != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('managementDepartment', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.departments}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('managementDepartment', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.managementDepartment == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <!-- 放置位置 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>放置位置</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.locationName != null and searchDto.locationName != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('locationName', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.locations}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('locationName', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.locationName == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <!-- 管理员 -->
+                        <th>
+                            <div class="d-flex align-items-center gap-1">
+                                <span>管理员</span>
+                                <div class="dropdown">
+                                    <i class="bi bi-funnel-fill cursor-pointer" data-bs-toggle="dropdown" style="cursor: pointer; font-size: 0.8em;"
+                                       th:classappend="${searchDto.manager != null and searchDto.manager != ''} ? 'text-primary' : 'text-muted'"></i>
+                                    <ul class="dropdown-menu shadow" style="max-height: 300px; overflow-y: auto;">
+                                        <li><a class="dropdown-item" href="javascript:void(0)" onclick="applyFilter('manager', '')">全部</a></li>
+                                        <li th:each="opt : ${filterOptions.managers}">
+                                            <a class="dropdown-item" href="javascript:void(0)" 
+                                               th:data-val="${opt}" onclick="applyFilter('manager', this.getAttribute('data-val'))"
+                                               th:text="${opt}"
+                                               th:classappend="${searchDto.manager == opt} ? 'active' : ''"></a>
+                                        </li>
+                                    </ul>
+                                </div>
+                            </div>
+                        </th>
+                        
+                        <th>备注</th>
+                        
+                        <th class="text-center sticky-end bg-light" style="right: 0; box-shadow: -2px 0 5px rgba(0,0,0,0.05);">操作</th>
+                    </tr>
+                    </thead>
+                    <tbody>
+                    <tr th:each="asset : ${assets}">
+                        <td class="text-center">
+                            <input type="checkbox" class="form-check-input row-checkbox" name="ids" th:value="${asset.id}">
+                        </td>
+                        <td class="text-center" th:text="${asset.sequenceNumber}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.dataSource}" th:title="${asset.dataSource}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.reportingUnit}" th:title="${asset.reportingUnit}"></td>
+                        <td class="text-truncate" style="max-width: 150px; font-weight: 500;" th:text="${asset.name}" th:title="${asset.name}"></td>
+                        <td th:text="${asset.category}"></td>
+                        <td class="text-truncate" style="max-width: 100px;" th:text="${asset.model}" th:title="${asset.model}"></td>
+                        <td class="text-center" th:text="${asset.hasAssetNumber}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.assetNumber}" th:title="${asset.assetNumber}"></td>
+                        <td class="text-center">
+                            <span class="badge rounded-pill" 
+                                  th:text="${asset.status}"
+                                  th:classappend="${asset.status == '正常' || asset.status == '在用' ? 'bg-success' : 
+                                                   (asset.status == '闲置' ? 'bg-warning text-dark' : 
+                                                   (asset.status == '报废' || asset.status == '待报废' ? 'bg-danger' : 
+                                                   (asset.status == '丢失' ? 'bg-dark' : 
+                                                   (asset.status == '维修中' ? 'bg-info text-dark' : 'bg-secondary'))))}">
+                            </span>
+                        </td>
+                        <td th:text="${asset.purchaseDate}"></td>
+                        <td class="text-truncate" style="max-width: 100px;" th:text="${asset.acquisitionSource}" th:title="${asset.acquisitionSource}"></td>
+                        <td class="text-end" th:text="${asset.quantity}"></td>
+                        <td class="text-end" th:text="${asset.originalValue}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.managementDepartment}" th:title="${asset.managementDepartment}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.location != null ? asset.location.name : '未分配'}" th:title="${asset.location != null ? asset.location.name : '未分配'}"></td>
+                        <td th:text="${asset.manager}"></td>
+                        <td class="text-truncate" style="max-width: 120px;" th:text="${asset.remark}" th:title="${asset.remark}"></td>
+                        <td class="sticky-end bg-white" style="right: 0; box-shadow: -2px 0 5px rgba(0,0,0,0.05);">
+                            <div class="btn-group btn-group-sm" role="group">
+                                <button class="btn btn-outline-primary border-0" 
+                                        data-bs-toggle="modal" 
+                                        data-bs-target="#transferModal"
+                                        th:data-asset-id="${asset.id}"
+                                        th:data-asset-name="${asset.name}"
+                                        onclick="setupTransferModal(this)"
+                                        title="转移">
+                                    <i class="bi bi-arrow-left-right"></i>
+                                </button>
+                                <button class="btn btn-outline-secondary border-0"
+                                        data-bs-toggle="modal"
+                                        data-bs-target="#editModal"
+                                        th:data-asset-id="${asset.id}"
+                                        th:data-asset-name="${asset.name}"
+                                        th:data-asset-category="${asset.category}"
+                                        th:data-asset-model="${asset.model}"
+                                        th:data-asset-has-no="${asset.hasAssetNumber}"
+                                        th:data-asset-number="${asset.assetNumber}"
+                                        th:data-asset-status="${asset.status}"
+                                        th:data-asset-date="${asset.purchaseDate}"
+                                        th:data-asset-source="${asset.acquisitionSource}"
+                                        th:data-asset-qty="${asset.quantity}"
+                                        th:data-asset-val="${asset.originalValue}"
+                                        th:data-asset-dept="${asset.managementDepartment}"
+                                        th:data-asset-manager="${asset.manager}"
+                                        th:data-asset-remark="${asset.remark}"
+                                        th:data-asset-data-source="${asset.dataSource}"
+                                        th:data-asset-reporting-unit="${asset.reportingUnit}"
+                                        onclick="setupEditModal(this)"
+                                        title="修改">
+                                    <i class="bi bi-pencil"></i>
+                                </button>
+                                <form th:action="@{/assets/delete/{id}(id=${asset.id})}" method="post" style="display:inline;">
+                                    <button type="submit" class="btn btn-outline-danger border-0" onclick="return confirm('确定要删除该资产吗？')" title="删除">
+                                        <i class="bi bi-trash"></i>
+                                    </button>
+                                </form>
+                            </div>
+                        </td>
+                    </tr>
+                    <tr th:if="${#lists.isEmpty(assets)}">
+                        <td colspan="18" class="text-center text-muted py-5">
+                            <i class="bi bi-inbox fs-1 d-block mb-2"></i>
+                            暂无资产数据，请先导入或新增。
+                        </td>
+                    </tr>
+                    </tbody>
+                </table>
+            </div>
+            
+            <!-- Pagination -->
+            <div class="p-3 border-top" th:if="${page.totalPages > 1}">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item" th:classappend="${page.first} ? 'disabled'">
+                            <a class="page-link" th:href="@{/assets(page=${page.number - 1}, keyword=${searchDto.keyword}, category=${searchDto.category}, hasAssetNumber=${searchDto.hasAssetNumber}, status=${searchDto.status}, purchaseDate=${searchDto.purchaseDate}, acquisitionSource=${searchDto.acquisitionSource}, managementDepartment=${searchDto.managementDepartment}, locationName=${searchDto.locationName}, manager=${searchDto.manager}, creationYear=${searchDto.creationYear})}">上一页</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link" th:text="${'第 ' + (page.number + 1) + ' / ' + page.totalPages + ' 页'}"></span>
+                        </li>
+                        <li class="page-item" th:classappend="${page.last} ? 'disabled'">
+                            <a class="page-link" th:href="@{/assets(page=${page.number + 1}, keyword=${searchDto.keyword}, category=${searchDto.category}, hasAssetNumber=${searchDto.hasAssetNumber}, status=${searchDto.status}, purchaseDate=${searchDto.purchaseDate}, acquisitionSource=${searchDto.acquisitionSource}, managementDepartment=${searchDto.managementDepartment}, locationName=${searchDto.locationName}, manager=${searchDto.manager}, creationYear=${searchDto.creationYear})}">下一页</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Create Modal -->
+    <div class="modal fade" id="createModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/assets/create}" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">新增资产</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">数据来源</label>
+                                <input type="text" name="dataSource" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">填报单位</label>
+                                <input type="text" name="reportingUnit" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">资产名称</label>
+                                <input type="text" name="name" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">资产类别</label>
+                                <input type="text" name="category" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">规格型号</label>
+                                <input type="text" name="model" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">有无编号</label>
+                                <select name="hasAssetNumber" class="form-select">
+                                    <option value="有">有</option>
+                                    <option value="无">无</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">资产编号</label>
+                                <input type="text" name="assetNumber" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">使用状态</label>
+                                <input type="text" name="status" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">取得时间</label>
+                                <input type="date" name="purchaseDate" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">取得来源</label>
+                                <input type="text" name="acquisitionSource" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">数量</label>
+                                <input type="number" name="quantity" class="form-control" value="1">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">原值</label>
+                                <input type="number" step="0.01" name="originalValue" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">管理部门</label>
+                                <input type="text" name="managementDepartment" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">管理员</label>
+                                <input type="text" name="manager" class="form-control">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">备注</label>
+                                <textarea name="remark" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Import Modal -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/assets/import}" method="post" enctype="multipart/form-data">
+                    <div class="modal-header">
+                        <h5 class="modal-title">批量导入资产</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">选择 Excel 文件</label>
+                            <input type="file" name="file" class="form-control" accept=".xlsx, .xls" required>
+                        </div>
+                        <div class="alert alert-info small">
+                            必填列：序号, 资产名称, 资产类别, 规格型号, 有无资产编号, 资产编号, 使用状态, 资产放置位置
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">上传</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Transfer Modal -->
+    <div class="modal fade" id="transferModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/assets/transfer}" method="post">
+                    <input type="hidden" name="assetId" id="transferAssetId">
+                    <div class="modal-header">
+                        <h5 class="modal-title">资产转移</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p>正在转移：<strong id="transferAssetName"></strong></p>
+                        <div class="mb-3">
+                            <label class="form-label">目标位置</label>
+                            <select name="targetLocationId" class="form-select" required>
+                                <option value="">-- 请选择位置 --</option>
+                                <option th:each="loc : ${locations}" th:value="${loc.id}" th:text="${loc.name}"></option>
+                            </select>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">目标管理员 (可选)</label>
+                            <select name="targetManagerName" class="form-select">
+                                <option value="">-- 请选择管理员 (不变更则留空) --</option>
+                                <option th:each="mgr : ${managers}" th:value="${mgr.name}" th:text="${mgr.name}"></option>
+                            </select>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">确认转移</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Modal -->
+    <div class="modal fade" id="editModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/assets/update}" method="post">
+                    <input type="hidden" name="id" id="editAssetId">
+                    <div class="modal-header">
+                        <h5 class="modal-title">修改资产信息</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="row g-3">
+                            <div class="col-md-6">
+                                <label class="form-label">资产名称</label>
+                                <input type="text" name="name" id="editAssetName" class="form-control" required>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">资产类别</label>
+                                <input type="text" name="category" id="editAssetCategory" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">规格型号</label>
+                                <input type="text" name="model" id="editAssetModel" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">有无编号</label>
+                                <select name="hasAssetNumber" id="editAssetHasNo" class="form-select">
+                                    <option value="有">有</option>
+                                    <option value="无">无</option>
+                                </select>
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">资产编号</label>
+                                <input type="text" name="assetNumber" id="editAssetNumber" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">使用状态</label>
+                                <input type="text" name="status" id="editAssetStatus" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">取得时间</label>
+                                <input type="date" name="purchaseDate" id="editAssetDate" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">取得来源</label>
+                                <input type="text" name="acquisitionSource" id="editAssetSource" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">数量</label>
+                                <input type="number" name="quantity" id="editAssetQty" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">原值</label>
+                                <input type="number" step="0.01" name="originalValue" id="editAssetVal" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">管理部门</label>
+                                <input type="text" name="managementDepartment" id="editAssetDept" class="form-control">
+                            </div>
+                            <div class="col-md-6">
+                                <label class="form-label">管理员</label>
+                                <input type="text" name="manager" id="editAssetManager" class="form-control">
+                            </div>
+                            <div class="col-md-12">
+                                <label class="form-label">备注</label>
+                                <textarea name="remark" id="editAssetRemark" class="form-control" rows="2"></textarea>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Delete Form -->
+    <form id="batchDeleteForm" th:action="@{/assets/delete/batch}" method="post" style="display:none;">
+    </form>
+
+    <script>
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            for(let i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+
+        function deleteBatch() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请先选择要删除的数据');
+                return;
+            }
+            if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 条数据吗？')) {
+                return;
+            }
+            
+            const form = document.getElementById('batchDeleteForm');
+            form.innerHTML = ''; // Clear previous inputs
+            
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+            
+            form.submit();
+        }
+
+        function applyFilter(field, value) {
+            const form = document.getElementById('filterForm');
+            form.querySelector(`input[name='${field}']`).value = value;
+            form.submit();
+        }
+
+        function setupTransferModal(button) {
+            const id = button.getAttribute('data-asset-id');
+            const name = button.getAttribute('data-asset-name');
+            document.getElementById('transferAssetId').value = id;
+            document.getElementById('transferAssetName').innerText = name;
+        }
+
+        function setupEditModal(button) {
+            document.getElementById('editAssetId').value = button.getAttribute('data-asset-id');
+            document.getElementById('editAssetName').value = button.getAttribute('data-asset-name');
+            document.getElementById('editAssetCategory').value = button.getAttribute('data-asset-category');
+            document.getElementById('editAssetModel').value = button.getAttribute('data-asset-model');
+            document.getElementById('editAssetHasNo').value = button.getAttribute('data-asset-has-no');
+            document.getElementById('editAssetNumber').value = button.getAttribute('data-asset-number');
+            document.getElementById('editAssetStatus').value = button.getAttribute('data-asset-status');
+            document.getElementById('editAssetDate').value = button.getAttribute('data-asset-date');
+            document.getElementById('editAssetSource').value = button.getAttribute('data-asset-source');
+            document.getElementById('editAssetQty').value = button.getAttribute('data-asset-qty');
+            document.getElementById('editAssetVal').value = button.getAttribute('data-asset-val');
+            document.getElementById('editAssetDept').value = button.getAttribute('data-asset-dept');
+            document.getElementById('editAssetManager').value = button.getAttribute('data-asset-manager');
+            document.getElementById('editAssetRemark').value = button.getAttribute('data-asset-remark');
+            document.getElementById('editAssetDataSource').value = button.getAttribute('data-asset-data-source');
+            document.getElementById('editAssetReportingUnit').value = button.getAttribute('data-asset-reporting-unit');
+        }
+    </script>
+</div>
+</body>
+</html>

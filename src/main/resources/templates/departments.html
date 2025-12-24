@@ -1,0 +1,188 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::#dept-content})}">
+<body>
+<div id="dept-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>部门(位置)管理</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-danger" onclick="deleteBatch()">
+                <i class="bi bi-trash"></i> 批量删除
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#departmentModal">
+                <i class="bi bi-plus-lg"></i> 新增部门
+            </button>
+        </div>
+    </div>
+
+    <div th:if="${param.error == 'hasAssets'}" class="alert alert-danger">
+        无法删除：该部门/位置下仍有资产，请先转移资产。
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAll(this)">
+                    </th>
+                    <th>名称</th>
+                    <th>描述</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="dept : ${departments}">
+                    <td>
+                        <input type="checkbox" class="form-check-input row-checkbox" name="ids" th:value="${dept.id}">
+                    </td>
+                    <td th:text="${dept.name}"></td>
+                    <td th:text="${dept.description}"></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary"
+                                th:data-id="${dept.id}"
+                                th:data-name="${dept.name}"
+                                th:data-desc="${dept.description}"
+                                onclick="openEditModal(this)">
+                            <i class="bi bi-pencil"></i> 修改
+                        </button>
+                        <a th:href="@{/departments/delete/{id}(id=${dept.id})}" 
+                           class="btn btn-sm btn-outline-danger"
+                           onclick="return confirm('确定要删除该部门吗？')">
+                            <i class="bi bi-trash"></i> 删除
+                        </a>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(departments)}">
+                    <td colspan="4" class="text-center text-muted py-4">暂无数据。</td>
+                </tr>
+                </tbody>
+            </table>
+            
+            <!-- Pagination -->
+            <div class="mt-3" th:if="${page.totalPages > 1}">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item" th:classappend="${page.first} ? 'disabled'">
+                            <a class="page-link" th:href="@{/departments(page=${page.number - 1})}">上一页</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link" th:text="${'第 ' + (page.number + 1) + ' / ' + page.totalPages + ' 页'}"></span>
+                        </li>
+                        <li class="page-item" th:classappend="${page.last} ? 'disabled'">
+                            <a class="page-link" th:href="@{/departments(page=${page.number + 1})}">下一页</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Department Modal -->
+    <div class="modal fade" id="departmentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/departments/create}" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">新增部门(位置)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">名称</label>
+                            <input type="text" name="name" class="form-control" placeholder="例如：研发部、101室" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea name="description" class="form-control" rows="3" placeholder="可选备注"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Edit Department Modal -->
+    <div class="modal fade" id="editDepartmentModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/departments/update}" method="post">
+                    <input type="hidden" name="id" id="editDeptId">
+                    <div class="modal-header">
+                        <h5 class="modal-title">修改部门(位置)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">名称</label>
+                            <input type="text" name="name" id="editDeptName" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">描述</label>
+                            <textarea name="description" id="editDeptDesc" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Delete Form -->
+    <form id="batchDeleteForm" th:action="@{/departments/delete/batch}" method="post" style="display:none;">
+    </form>
+
+    <script>
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            for(let i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+
+        function deleteBatch() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请先选择要删除的部门');
+                return;
+            }
+            if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 个部门吗？')) {
+                return;
+            }
+            
+            const form = document.getElementById('batchDeleteForm');
+            form.innerHTML = '';
+            
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+            
+            form.submit();
+        }
+
+        function openEditModal(btn) {
+            var id = btn.getAttribute('data-id');
+            var name = btn.getAttribute('data-name');
+            var desc = btn.getAttribute('data-desc');
+            
+            document.getElementById('editDeptId').value = id;
+            document.getElementById('editDeptName').value = name;
+            document.getElementById('editDeptDesc').value = desc;
+            
+            var modal = new bootstrap.Modal(document.getElementById('editDepartmentModal'));
+            modal.show();
+        }
+    </script>
+</div>
+</body>
+</html>

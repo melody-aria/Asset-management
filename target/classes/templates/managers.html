@@ -1,0 +1,184 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::#mgr-content})}">
+<body>
+<div id="mgr-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>管理员管理</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-danger" onclick="deleteBatch()">
+                <i class="bi bi-trash"></i> 批量删除
+            </button>
+            <button class="btn btn-primary" data-bs-toggle="modal" data-bs-target="#managerModal">
+                <i class="bi bi-plus-lg"></i> 新增管理员
+            </button>
+        </div>
+    </div>
+
+    <div class="card shadow-sm">
+        <div class="card-body">
+            <table class="table table-hover align-middle">
+                <thead class="table-light">
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAll(this)">
+                    </th>
+                    <th>姓名</th>
+                    <th>职位/备注</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="mgr : ${managers}">
+                    <td>
+                        <input type="checkbox" class="form-check-input row-checkbox" name="ids" th:value="${mgr.id}">
+                    </td>
+                    <td th:text="${mgr.name}"></td>
+                    <td th:text="${mgr.description}"></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary"
+                                th:data-id="${mgr.id}"
+                                th:data-name="${mgr.name}"
+                                th:data-desc="${mgr.description}"
+                                onclick="openEditModal(this)">
+                            <i class="bi bi-pencil"></i> 修改
+                        </button>
+                        <form th:action="@{/managers/delete/{id}(id=${mgr.id})}" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('确定要删除该管理员吗？')">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(managers)}">
+                    <td colspan="4" class="text-center text-muted py-4">暂无数据。</td>
+                </tr>
+                </tbody>
+            </table>
+            
+            <!-- Pagination -->
+            <div class="mt-3" th:if="${page.totalPages > 1}">
+                <nav>
+                    <ul class="pagination justify-content-center mb-0">
+                        <li class="page-item" th:classappend="${page.first} ? 'disabled'">
+                            <a class="page-link" th:href="@{/managers(page=${page.number - 1})}">上一页</a>
+                        </li>
+                        <li class="page-item disabled">
+                            <span class="page-link" th:text="${'第 ' + (page.number + 1) + ' / ' + page.totalPages + ' 页'}"></span>
+                        </li>
+                        <li class="page-item" th:classappend="${page.last} ? 'disabled'">
+                            <a class="page-link" th:href="@{/managers(page=${page.number + 1})}">下一页</a>
+                        </li>
+                    </ul>
+                </nav>
+            </div>
+        </div>
+    </div>
+
+    <!-- Add Manager Modal -->
+    <div class="modal fade" id="managerModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/managers/create}" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">新增管理员</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">姓名</label>
+                            <input type="text" name="name" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">职位/备注</label>
+                            <textarea name="description" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+    <!-- Edit Manager Modal -->
+    <div class="modal fade" id="editManagerModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/managers/update}" method="post">
+                    <input type="hidden" name="id" id="editMgrId">
+                    <div class="modal-header">
+                        <h5 class="modal-title">修改管理员</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">姓名</label>
+                            <input type="text" name="name" id="editMgrName" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">职位/备注</label>
+                            <textarea name="description" id="editMgrDesc" class="form-control" rows="3"></textarea>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Delete Form -->
+    <form id="batchDeleteForm" th:action="@{/managers/delete/batch}" method="post" style="display:none;">
+    </form>
+
+    <script>
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            for(let i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+
+        function deleteBatch() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请先选择要删除的管理员');
+                return;
+            }
+            if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 个管理员吗？')) {
+                return;
+            }
+            
+            const form = document.getElementById('batchDeleteForm');
+            form.innerHTML = '';
+            
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+            
+            form.submit();
+        }
+
+        function openEditModal(btn) {
+            var id = btn.getAttribute('data-id');
+            var name = btn.getAttribute('data-name');
+            var desc = btn.getAttribute('data-desc');
+            
+            document.getElementById('editMgrId').value = id;
+            document.getElementById('editMgrName').value = name;
+            document.getElementById('editMgrDesc').value = desc;
+            
+            var modal = new bootstrap.Modal(document.getElementById('editManagerModal'));
+            modal.show();
+        }
+    </script>
+</div>
+</body>
+</html>

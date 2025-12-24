@@ -1,0 +1,263 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:replace="~{layout :: layout(~{::#audit-content})}">
+<body>
+<div id="audit-content">
+    <div class="d-flex justify-content-between align-items-center mb-4">
+        <h2>盘点与对比</h2>
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-danger" onclick="deleteBatch()">
+                <i class="bi bi-trash"></i> 批量删除
+            </button>
+            <button class="btn btn-warning" data-bs-toggle="modal" data-bs-target="#snapshotModal">
+                <i class="bi bi-camera"></i> 创建快照
+            </button>
+        </div>
+    </div>
+
+    <!-- Snapshot Management List -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">快照管理</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-hover">
+                <thead>
+                <tr>
+                    <th style="width: 40px;">
+                        <input type="checkbox" class="form-check-input" id="selectAll" onclick="toggleAll(this)">
+                    </th>
+                    <th>快照名称</th>
+                    <th>包含资产数</th>
+                    <th>创建时间</th>
+                    <th>操作</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="s : ${snapshots}">
+                    <td>
+                        <input type="checkbox" class="form-check-input row-checkbox" name="ids" th:value="${s.id}">
+                    </td>
+                    <td th:text="${s.name}"></td>
+                    <td>
+                        <span class="badge bg-secondary rounded-pill" th:text="${s.assetCount != null ? s.assetCount : 0}"></span>
+                    </td>
+                    <td th:text="${#temporals.format(s.createdTime, 'yyyy-MM-dd HH:mm:ss')}"></td>
+                    <td>
+                        <button class="btn btn-sm btn-outline-primary"
+                                th:data-id="${s.id}"
+                                th:data-name="${s.name}"
+                                th:data-time="${#temporals.format(s.createdTime, 'yyyy-MM-dd''T''HH:mm')}"
+                                onclick="openEditModal(this)">
+                            <i class="bi bi-pencil"></i> 修改
+                        </button>
+                        <form th:action="@{/audit/snapshot/delete/{id}(id=${s.id})}" method="post" style="display:inline;">
+                            <button type="submit" class="btn btn-sm btn-outline-danger" onclick="return confirm('删除快照将无法恢复，确定要删除吗？')">
+                                <i class="bi bi-trash"></i> 删除
+                            </button>
+                        </form>
+                    </td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Comparison Form -->
+    <div class="card shadow-sm mb-4">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">快照对比</h5>
+        </div>
+        <div class="card-body">
+            <form th:action="@{/audit/compare}" method="get" class="row g-3 align-items-end">
+                <div class="col-md-4">
+                    <label class="form-label">旧快照 (基准)</label>
+                    <select name="oldSnapshotId" class="form-select" required>
+                        <option value="">请选择...</option>
+                        <option th:each="s : ${snapshots}" 
+                                th:value="${s.id}" 
+                                th:text="${s.name + ' (' + #temporals.format(s.createdTime, 'yyyy-MM-dd HH:mm') + ') - ' + (s.assetCount != null ? s.assetCount : 0) + '条'}"
+                                th:selected="${s.id == oldSnapshotId}"></option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <label class="form-label">新快照 (目标)</label>
+                    <select name="newSnapshotId" class="form-select" required>
+                        <option value="">请选择...</option>
+                        <option th:each="s : ${snapshots}" 
+                                th:value="${s.id}" 
+                                th:text="${s.name + ' (' + #temporals.format(s.createdTime, 'yyyy-MM-dd HH:mm') + ') - ' + (s.assetCount != null ? s.assetCount : 0) + '条'}"
+                                th:selected="${s.id == newSnapshotId}"></option>
+                    </select>
+                </div>
+                <div class="col-md-4">
+                    <button type="submit" class="btn btn-primary me-2">对比</button>
+                    <a th:if="${oldSnapshotId != null}" 
+                       th:href="@{/audit/export(oldSnapshotId=${oldSnapshotId}, newSnapshotId=${newSnapshotId})}" 
+                       class="btn btn-outline-success">
+                        <i class="bi bi-file-earmark-excel"></i> 导出报告
+                    </a>
+                </div>
+            </form>
+        </div>
+    </div>    <!-- Comparison Results -->
+    <div class="card shadow-sm" th:if="${diffs != null}">
+        <div class="card-header bg-white">
+            <h5 class="mb-0">对比结果</h5>
+        </div>
+        <div class="card-body">
+            <table class="table table-striped">
+                <thead>
+                <tr>
+                    <th>类型</th>
+                    <th>资产编号</th>
+                    <th>名称</th>
+                    <th>型号</th>
+                    <th>位置</th>
+                    <th>状态</th>
+                </tr>
+                </thead>
+                <tbody>
+                <tr th:each="diff : ${diffs}">
+                    <td>
+                        <span th:if="${diff.type == '新增'}" class="badge bg-success">新增</span>
+                        <span th:if="${diff.type == '丢失'}" class="badge bg-danger">丢失/报废</span>
+                    </td>
+                    <td th:text="${diff.assetNumber}"></td>
+                    <td th:text="${diff.name}"></td>
+                    <td th:text="${diff.model}"></td>
+                    <td th:text="${diff.location}"></td>
+                    <td>
+                        <span class="badge rounded-pill" 
+                              th:text="${diff.status}"
+                              th:classappend="${diff.status == '正常' || diff.status == '在用' ? 'bg-success' : 
+                                               (diff.status == '闲置' ? 'bg-warning text-dark' : 
+                                               (diff.status == '报废' || diff.status == '待报废' ? 'bg-danger' : 
+                                               (diff.status == '丢失' ? 'bg-dark' : 
+                                               (diff.status == '维修中' ? 'bg-info text-dark' : 'bg-secondary'))))}">
+                        </span>
+                    </td>
+                </tr>
+                <tr th:if="${#lists.isEmpty(diffs)}">
+                    <td colspan="6" class="text-center text-success">未发现差异，两个快照完全一致。</td>
+                </tr>
+                </tbody>
+            </table>
+        </div>
+    </div>
+
+    <!-- Snapshot Modal -->
+    <div class="modal fade" id="snapshotModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/audit/snapshot}" method="post">
+                    <div class="modal-header">
+                        <h5 class="modal-title">创建新快照</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">快照名称</label>
+                            <input type="text" name="name" class="form-control" placeholder="例如：2024年终盘点" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">筛选资产创建年份</label>
+                            <select name="filterYear" class="form-select">
+                                <option value="">全部资产 (不筛选)</option>
+                                <option th:each="y : ${creationYears}" th:value="${y}" th:text="${y} + '年'"></option>
+                            </select>
+                            <div class="form-text">仅将指定年份创建的资产纳入此快照</div>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">创建时间 (可选)</label>
+                            <input type="datetime-local" name="createdTime" class="form-control">
+                            <div class="form-text">留空则使用当前时间</div>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">创建</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Edit Snapshot Modal -->
+    <div class="modal fade" id="editSnapshotModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form th:action="@{/audit/snapshot/update}" method="post">
+                    <input type="hidden" name="id" id="editSnapshotId">
+                    <div class="modal-header">
+                        <h5 class="modal-title">修改快照名称</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <div class="mb-3">
+                            <label class="form-label">快照名称</label>
+                            <input type="text" name="name" id="editSnapshotName" class="form-control" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">创建时间</label>
+                            <input type="datetime-local" name="createdTime" id="editSnapshotTime" class="form-control">
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">关闭</button>
+                        <button type="submit" class="btn btn-primary">保存修改</button>
+                    </div>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Batch Delete Form -->
+    <form id="batchDeleteForm" th:action="@{/audit/snapshot/delete/batch}" method="post" style="display:none;">
+    </form>
+
+    <script>
+        function toggleAll(source) {
+            const checkboxes = document.querySelectorAll('.row-checkbox');
+            for(let i=0, n=checkboxes.length;i<n;i++) {
+                checkboxes[i].checked = source.checked;
+            }
+        }
+
+        function deleteBatch() {
+            const checkboxes = document.querySelectorAll('.row-checkbox:checked');
+            if (checkboxes.length === 0) {
+                alert('请先选择要删除的快照');
+                return;
+            }
+            if (!confirm('确定要删除选中的 ' + checkboxes.length + ' 个快照吗？删除后无法恢复！')) {
+                return;
+            }
+            
+            const form = document.getElementById('batchDeleteForm');
+            form.innerHTML = '';
+            
+            checkboxes.forEach(cb => {
+                const input = document.createElement('input');
+                input.type = 'hidden';
+                input.name = 'ids';
+                input.value = cb.value;
+                form.appendChild(input);
+            });
+            
+            form.submit();
+        }
+
+        function openEditModal(btn) {
+            var id = btn.getAttribute('data-id');
+            var name = btn.getAttribute('data-name');
+            var time = btn.getAttribute('data-time');
+            document.getElementById('editSnapshotId').value = id;
+            document.getElementById('editSnapshotName').value = name;
+            document.getElementById('editSnapshotTime').value = time;
+            var modal = new bootstrap.Modal(document.getElementById('editSnapshotModal'));
+            modal.show();
+        }
+    </script>
+</div>
+</body>
+</html>

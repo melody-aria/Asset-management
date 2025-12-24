@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" th:fragment="layout(content)">
+<head>
+    <meta charset="UTF-8">
+    <title>固定资产管理系统</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.10.0/font/bootstrap-icons.css">
+    <style>
+        body {
+            background-color: #f4f6f9; /* Slightly lighter/modern grey */
+            font-family: 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+        }
+        .sidebar {
+            min-height: 100vh;
+            background: linear-gradient(180deg, #2c3e50 0%, #34495e 100%);
+            color: white;
+            box-shadow: 2px 0 5px rgba(0,0,0,0.1);
+        }
+        .sidebar .brand {
+            padding: 20px;
+            text-align: center;
+            border-bottom: 1px solid rgba(255,255,255,0.1);
+            margin-bottom: 10px;
+        }
+        .sidebar .brand h4 {
+            font-weight: 600;
+            letter-spacing: 1px;
+            margin: 0;
+        }
+        .sidebar a {
+            color: rgba(255,255,255,0.75);
+            text-decoration: none;
+            padding: 12px 20px;
+            display: block;
+            transition: all 0.3s;
+            border-left: 4px solid transparent;
+        }
+        .sidebar a:hover {
+            background-color: rgba(255,255,255,0.05);
+            color: white;
+        }
+        .sidebar a.active {
+            background-color: rgba(255,255,255,0.1);
+            color: white;
+            border-left-color: #3498db; /* Highlight color */
+        }
+        .content {
+            padding: 30px;
+            min-height: 100vh;
+        }
+        /* Card styling improvements */
+        .card {
+            border: none;
+            border-radius: 8px;
+            box-shadow: 0 0.125rem 0.25rem rgba(0,0,0,0.075) !important;
+        }
+        .card-header {
+            background-color: white;
+            border-bottom: 1px solid rgba(0,0,0,0.05);
+            padding: 15px 20px;
+        }
+        /* Table styling improvements */
+        .table thead th {
+            font-weight: 600;
+            color: #555;
+            border-bottom-width: 1px;
+        }
+        .table-hover tbody tr:hover {
+            background-color: rgba(52, 152, 219, 0.03);
+        }
+    </style>
+</head>
+<body>
+
+<div class="container-fluid">
+    <div class="row">
+        <!-- Sidebar -->
+        <div class="col-md-2 sidebar p-0">
+            <div class="brand">
+                <h4><i class="bi bi-grid-1x2-fill me-2"></i>资产管家</h4>
+            </div>
+            <div class="py-2">
+                <a th:href="@{/assets}" th:classappend="${module == 'assets' ? 'active' : ''}">
+                    <i class="bi bi-box-seam me-2"></i> 资产列表
+                </a>
+                <a th:href="@{/audit}" th:classappend="${module == 'audit' ? 'active' : ''}">
+                    <i class="bi bi-clipboard-data me-2"></i> 盘点与对比
+                </a>
+                <a th:href="@{/departments}" th:classappend="${module == 'departments' ? 'active' : ''}">
+                    <i class="bi bi-building me-2"></i> 部门管理
+                </a>
+                <a th:href="@{/managers}" th:classappend="${module == 'managers' ? 'active' : ''}">
+                    <i class="bi bi-people me-2"></i> 管理员管理
+                </a>
+                <a th:href="@{/logs}" th:classappend="${module == 'logs' ? 'active' : ''}">
+                    <i class="bi bi-journal-text me-2"></i> 操作日志
+                </a>
+            </div>
+        </div>
+
+        <!-- Main Content -->
+        <div class="col-md-10 content">
+            <div th:replace="${content}"></div>
+        </div>
+    </div>
+</div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>
